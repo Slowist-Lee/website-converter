@@ -5,6 +5,7 @@
 // @description  在浙大 WebVPN 页面右下角提供网址转化工具。
 // @match        *://*.webvpn.zju.edu.cn/*
 // @author       Slowist
+// @require      https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js
 // @grant        GM_addStyle
 // @run-at       document-end
 // @license      Apache 2.0
@@ -14,6 +15,10 @@
 
 (function() {
     'use strict';
+
+    const WEBVPN_HOST = 'webvpn.zju.edu.cn';
+    const AES_KEY_TEXT = 'wrdvpnisthebest!';
+    const AES_KEY_HEX = Array.from(AES_KEY_TEXT).map((ch) => ch.charCodeAt(0).toString(16).padStart(2, '0')).join('');
 
     GM_addStyle(`
         #converter-container-unique {
@@ -181,6 +186,81 @@
     const disableButton = document.getElementById('converter-disable-button-unique');
     const minimizeButton = document.getElementById('converter-minimize-button-unique');
 
+    function isCryptoReady() {
+        return typeof CryptoJS !== 'undefined' && CryptoJS.AES && CryptoJS.mode && CryptoJS.mode.CFB;
+    }
+
+    function encryptHostToHex(host) {
+        if (!isCryptoReady()) return null;
+        const key = CryptoJS.enc.Utf8.parse(AES_KEY_TEXT);
+        const iv = CryptoJS.enc.Utf8.parse(AES_KEY_TEXT);
+        const encrypted = CryptoJS.AES.encrypt(CryptoJS.enc.Utf8.parse(host), key, {
+            iv,
+            mode: CryptoJS.mode.CFB,
+            padding: CryptoJS.pad.NoPadding
+        });
+        return encrypted.ciphertext.toString(CryptoJS.enc.Hex);
+    }
+
+    function decryptHostFromHex(cipherHex) {
+        if (!isCryptoReady()) return null;
+        try {
+            const key = CryptoJS.enc.Utf8.parse(AES_KEY_TEXT);
+            const iv = CryptoJS.enc.Utf8.parse(AES_KEY_TEXT);
+            const cipherParams = CryptoJS.lib.CipherParams.create({
+                ciphertext: CryptoJS.enc.Hex.parse(cipherHex)
+            });
+            const decrypted = CryptoJS.AES.decrypt(cipherParams, key, {
+                iv,
+                mode: CryptoJS.mode.CFB,
+                padding: CryptoJS.pad.NoPadding
+            });
+            return decrypted.toString(CryptoJS.enc.Utf8);
+        } catch {
+            return null;
+        }
+    }
+
+    function convertUrl(inputText) {
+        const trimmedInput = inputText.trim();
+        if (!trimmedInput) return '';
+
+        const newWebVpnRegex = /^https?:\/\/webvpn\.zju\.edu\.cn\/(https?)\/([a-fA-F0-9]+)(\/.*)?$/;
+        const newWebVpnMatch = trimmedInput.match(newWebVpnRegex);
+        if (newWebVpnMatch && newWebVpnMatch[1] && newWebVpnMatch[2]) {
+            const protocol = newWebVpnMatch[1].toLowerCase();
+            let encryptedHostHex = newWebVpnMatch[2].toLowerCase();
+            if (encryptedHostHex.startsWith(AES_KEY_HEX)) {
+                encryptedHostHex = encryptedHostHex.slice(AES_KEY_HEX.length);
+            }
+            const host = decryptHostFromHex(encryptedHostHex);
+            if (host) {
+                return `${protocol}://${host}${newWebVpnMatch[3] || ''}`;
+            }
+        }
+
+        try {
+            const urlObj = new URL(trimmedInput);
+            const protocol = urlObj.protocol.toLowerCase();
+            if (protocol !== 'http:' && protocol !== 'https:') {
+                return trimmedInput;
+            }
+
+            const protocolWithoutColon = protocol.slice(0, -1);
+            const hostWithPort = urlObj.port ? `${urlObj.hostname}:${urlObj.port}` : urlObj.hostname;
+            const encryptedHostHex = encryptHostToHex(hostWithPort);
+            if (!encryptedHostHex) {
+                return '转换失败：加密组件未加载，请刷新页面后重试。';
+            }
+
+            const encodedHost = `${AES_KEY_HEX}${encryptedHostHex}`;
+            const pathAndQueryAndHash = `${urlObj.pathname}${urlObj.search}${urlObj.hash}`;
+            return `https://${WEBVPN_HOST}/${protocolWithoutColon}/${encodedHost}${pathAndQueryAndHash}`;
+        } catch {
+            return trimmedInput;
+        }
+    }
+
     function hideWindowWithAnimation() {
         if (!windowDiv.classList.contains('visible')) return;
         windowDiv.classList.add('hiding');
@@ -205,23 +285,7 @@
     });
 
     executeButton.addEventListener('click', () => {
-        const inputText = inputArea.value;
-        const regex = /^https?:\/\/([a-zA-Z0-9-]+)\.webvpn\.zju\.edu\.cn(?::\d+)?(\/.*)?$/;
-        const matchResult = inputText.match(regex);
-        let outputText;
-        if (matchResult && matchResult[1]) {
-            const capturedPart = matchResult[1]; const chunks = capturedPart.split('-');
-            const lastChunk = chunks[chunks.length - 1];
-            if (lastChunk === 's') {
-                outputText = "https://" + chunks.slice(0, -1).join(".");
-            } else {
-                outputText = "http://" + chunks.join(".");
-            }
-            outputText += (matchResult[2] || "");
-        } else {
-            outputText = inputText;
-        }
-        outputArea.value = outputText;
+        outputArea.value = convertUrl(inputArea.value);
     });
 
     copyButton.addEventListener('click', () => {
