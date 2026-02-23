@@ -1,5 +1,9 @@
 # README
 
+>[!WARNING]
+> 下面的截图是旧版WebVPN，效果仅作参考
+>
+
 ## 功能描述
 
 本脚本适用于[浙江大学WebVPN](https://webvpn.zju.edu.cn/)，提供在WebVPN代理下的链接到一般链接的转换。例如：
@@ -14,7 +18,7 @@
 
 <img src="./images/image-1.png" alt="示例图片" style="width:60%;" />
 
-转换规则可参考[新生手册](https://www.zjuers.com/welcome/network_detailed/#_5)。
+转换规则可参考[CC98帖子](https://www.cc98.org/topic/6319235)。
 
 ## 按键功能
 
@@ -30,6 +34,6 @@
 
 ## Other
 
-本插件编写比较简陋，学校的webvpn好像马上也要变了，欢迎pr；若感觉WebVPN使用不方便，还是推荐使用aTrust及ZJUConnect.
+本插件编写比较简陋，欢迎pr；若感觉WebVPN使用不方便，还是推荐使用aTrust及ZJUConnect.
 
 
